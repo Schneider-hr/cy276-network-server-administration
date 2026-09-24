@@ -2,6 +2,16 @@
 
 **Goal:** stand up a Windows Server domain controller (AD DS + DNS), configure DHCP to hand out leases automatically, set up Windows Deployment Services for network-based OS installs, and join a Windows 10 client to the domain — all in a VirtualBox lab, GUI-first (matching how the actual exam was structured).
 
+## Before any of this: getting the VM to actually install
+
+The lab VM itself didn't come up cleanly on the first attempt, and the failures were worth tracking down rather than working around blind:
+
+- **Boot loop back to the UEFI Boot Manager screen** on "I will install the operating system later" — that option creates a VM with nothing attached to boot from, so it correctly has nowhere to go; the fix is attaching the installer ISO to the virtual CD drive *before* first boot, not after.
+- **"Windows cannot find the Microsoft Software License Terms"** on the manual ISO path, with VMware's Easy Install failing the same run in a different way — the common factor pointed at the ISO itself, but the file turned out to be a genuine Microsoft Evaluation Center download at the expected size, not a truncated one. The actual cause was narrowed down by testing the identical ISO in a different hypervisor: it installed cleanly under **VirtualBox**, isolating the fault to a VMware Workstation compatibility quirk with that particular ISO/Easy-Install combination rather than the media — a real lesson in not trusting "corrupted download" as the answer just because it's the most common cause, when a same-file cross-hypervisor test is cheap enough to just run.
+- **Ctrl+Alt+Delete affecting the host, not the guest, even with focus inside the VM window** — a known VirtualBox behavior, not a bug: the combination has to be sent through VirtualBox's own **Input → Keyboard → Insert Ctrl+Alt+Del** menu action (or Host key + Del) rather than the physical key combo, since the OS intercepts that specific combination before it ever reaches guest capture.
+
+Once installed, the "no product key" prompt was answered by leaving it blank and continuing unactivated — correct and expected for a lab/coursework build with no licensing requirement.
+
 ## The domain controller — and a networking bug that silently broke everything
 
 After promoting the server to a domain controller (AD DS + DNS, both come together), the very first real problem wasn't AD-related at all — it was VM networking. The server had been left on VirtualBox's **default NAT** adapter, which gave it an address like `10.0.2.15` with gateway `10.0.2.2`. That's VirtualBox's classic default-NAT signature: every VM on default NAT gets its own **isolated** NAT instance. Two VMs both individually on default NAT can each reach the internet, but **cannot see or reach each other at all** — which would have made the eventual Windows 10 client's domain join impossible without ever throwing an obvious error pointing at the real cause.
